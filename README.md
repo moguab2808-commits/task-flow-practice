@@ -1,4 +1,4 @@
-# task-flow
+# 메모 등록
 
 메모를 작성해 등록하고 목록으로 보는 웹 앱. 메모는 서버 메모리에만 저장하므로 서버를 다시 시작하면 사라진다. 설계 문서는 PRD.md, ARCHITECTURE.md, DECISIONS.md 를 본다.
 
