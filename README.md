@@ -1,6 +1,6 @@
 # 메모 등록
 
-메모를 작성해 등록하고 목록으로 보는 웹 앱. 메모는 서버 메모리에만 저장하므로 서버를 다시 시작하면 사라진다. 설계 문서는 PRD.md, ARCHITECTURE.md, DECISIONS.md 를 본다.
+메모를 작성해 등록하고 목록으로 보는 웹 앱. 메모는 SQLite 파일(`backend/memos.db`)에 저장하므로 서버를 다시 시작해도 남는다. DB 파일은 Git 에 올라가지 않는다. 설계 문서는 PRD.md, ARCHITECTURE.md, DECISIONS.md 를 본다.
 
 ## 구조
 
@@ -25,3 +25,5 @@ npm run dev
 ```
 
 브라우저에서 http://localhost:5173 을 연다.
+
+DB 파일 위치를 바꾸려면 서버를 켜기 전에 환경변수 `MEMO_DB_PATH` 에 파일 경로를 지정한다.
