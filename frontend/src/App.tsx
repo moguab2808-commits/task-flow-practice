@@ -1,27 +1,41 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { SyntheticEvent } from 'react'
 
-const MAX_LENGTH = 300
+const TITLE_MAX = 100
+const DESCRIPTION_MAX = 300
 
-type Memo = { id: number; content: string }
+type Status = 'TODO' | 'IN_PROGRESS' | 'DONE'
+type Task = {
+  id: number
+  title: string
+  description: string
+  status: Status
+}
 
-async function fetchMemos(offset: number) {
-  const res = await fetch(`/memos?offset=${offset}`)
+const STATUS_LABEL: Record<Status, string> = {
+  TODO: '할 일',
+  IN_PROGRESS: '진행 중',
+  DONE: '완료',
+}
+
+async function fetchTasks(offset: number) {
+  const res = await fetch(`/api/tasks?offset=${offset}`)
   if (!res.ok) throw new Error('목록을 불러오지 못했습니다.')
-  return (await res.json()) as { items: Memo[]; has_more: boolean }
+  return (await res.json()) as { items: Task[]; has_more: boolean }
 }
 
 function App() {
-  const [content, setContent] = useState('')
-  const [memos, setMemos] = useState<Memo[]>([])
+  const [title, setTitle] = useState('')
+  const [description, setDescription] = useState('')
+  const [tasks, setTasks] = useState<Task[]>([])
   const [hasMore, setHasMore] = useState(false)
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
 
   const loadFirstPage = useCallback(async () => {
     try {
-      const page = await fetchMemos(0)
-      setMemos(page.items)
+      const page = await fetchTasks(0)
+      setTasks(page.items)
       setHasMore(page.has_more)
     } catch {
       setError('목록을 불러오지 못했습니다.')
@@ -37,13 +51,14 @@ function App() {
     setNotice('')
     setError('')
     try {
-      const res = await fetch('/memos', {
+      const res = await fetch('/api/tasks', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ title, description }),
       })
       if (!res.ok) throw new Error()
-      setContent('')
+      setTitle('')
+      setDescription('')
       setNotice('등록되었습니다.')
       await loadFirstPage()
     } catch {
@@ -53,8 +68,8 @@ function App() {
 
   async function loadMore() {
     try {
-      const page = await fetchMemos(memos.length)
-      setMemos((prev) => [...prev, ...page.items])
+      const page = await fetchTasks(tasks.length)
+      setTasks((prev) => [...prev, ...page.items])
       setHasMore(page.has_more)
     } catch {
       setError('목록을 불러오지 못했습니다.')
@@ -64,19 +79,40 @@ function App() {
   return (
     <main>
       <section>
-        <h2>메모 작성</h2>
+        <h2>카드 작성</h2>
         <form onSubmit={submit}>
-          <textarea
-            value={content}
-            maxLength={MAX_LENGTH}
-            rows={10}
-            style={{ width: '30%', boxSizing: 'border-box' }}
-            onChange={(e) => setContent(e.target.value)}
-          />
           <div>
-            {content.length} / {MAX_LENGTH}
+            <label>
+              제목 (필수)
+              <br />
+              <input
+                value={title}
+                maxLength={TITLE_MAX}
+                style={{ width: '30%', boxSizing: 'border-box' }}
+                onChange={(e) => setTitle(e.target.value)}
+              />
+            </label>
+            <div>
+              {title.length} / {TITLE_MAX}
+            </div>
           </div>
-          <button type="submit" disabled={!content.trim()}>
+          <div>
+            <label>
+              설명 (선택)
+              <br />
+              <textarea
+                value={description}
+                maxLength={DESCRIPTION_MAX}
+                rows={6}
+                style={{ width: '30%', boxSizing: 'border-box' }}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+            </label>
+            <div>
+              {description.length} / {DESCRIPTION_MAX}
+            </div>
+          </div>
+          <button type="submit" disabled={!title.trim()}>
             등록
           </button>
         </form>
@@ -85,13 +121,16 @@ function App() {
       </section>
 
       <section>
-        <h2>메모 목록</h2>
-        {memos.length === 0 ? (
-          <p>아직 메모가 없습니다.</p>
+        <h2>카드 목록</h2>
+        {tasks.length === 0 ? (
+          <p>아직 카드가 없습니다.</p>
         ) : (
           <ul>
-            {memos.map((m) => (
-              <li key={m.id}>{m.content}</li>
+            {tasks.map((t) => (
+              <li key={t.id}>
+                <strong>{t.title}</strong> [{STATUS_LABEL[t.status]}]
+                {t.description && <div>{t.description}</div>}
+              </li>
             ))}
           </ul>
         )}
