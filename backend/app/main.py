@@ -157,6 +157,24 @@ def change_status(task_id: int, body: StatusIn):
     return dict(row)
 
 
+@app.delete("/api/tasks/{task_id}", status_code=204)
+def delete_task(task_id: int):
+    # 저장소에서 완전히 지운다. 되돌릴 수 없다 (D-013). 삭제 전 확인은 화면의 일이다 (D-024).
+    try:
+        conn = connect()
+        try:
+            with conn:
+                deleted = conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,)).rowcount
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        log.exception("카드 삭제 실패")
+        raise HTTPException(status_code=500, detail="카드를 삭제하지 못했습니다.")
+    if deleted == 0:
+        raise HTTPException(status_code=404, detail="카드를 찾을 수 없습니다.")
+    log.info("카드 삭제 완료 (id=%s)", task_id)
+
+
 @app.get("/api/tasks")
 def list_tasks(month: str = Query(pattern=MONTH_PATTERN)):
     # 그 달에 예정일이 있는 카드 전부. 쪽 나누기 없이 날짜순, 같은 날은 등록순 (D-022).
