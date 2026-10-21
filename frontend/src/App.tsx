@@ -102,7 +102,11 @@ function App() {
     setViewMonth(d.getMonth())
   }
 
-  function goToday() {}
+  function goToday() {
+    const d = new Date()
+    setViewYear(d.getFullYear())
+    setViewMonth(d.getMonth())
+  }
 
   async function submit(e: SyntheticEvent) {
     e.preventDefault()
