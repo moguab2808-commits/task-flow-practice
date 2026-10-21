@@ -43,7 +43,6 @@ function Calendar({ year, month, tasks, loading, selectedId, onSelect, onPrev, o
 
   const byDate = new Map<string, Task[]>()
   for (const t of tasks) {
-    if (!t.scheduled_date) continue
     byDate.set(t.scheduled_date, [...(byDate.get(t.scheduled_date) ?? []), t])
   }
 

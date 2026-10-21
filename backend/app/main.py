@@ -42,10 +42,14 @@ def init_db() -> None:
             "created_at TEXT NOT NULL, "
             "updated_at TEXT NOT NULL)"
         )
-        # 예정일이 생기기 전에 만든 DB 에는 컬럼만 더한다. 기존 카드는 예정일 없음(NULL)이 된다.
+        # 예정일이 생기기 전에 만든 DB 에는 컬럼만 더한다.
         columns = {row["name"] for row in conn.execute("PRAGMA table_info(tasks)")}
         if "scheduled_date" not in columns:
             conn.execute("ALTER TABLE tasks ADD COLUMN scheduled_date TEXT")
+        # 예정일은 필수이므로(D-021) 예정일 없는 기존 카드는 만든 날짜로 채운다. 카드를 지우지 않고
+        # updated_at 도 바꾸지 않는다. 컬럼은 NULL 을 허용한 채 두고 필수는 API 가 강제한다.
+        # 채울 NULL 이 없으면 아무 일도 하지 않으므로 여러 번 시작해도 결과가 같다.
+        conn.execute("UPDATE tasks SET scheduled_date = substr(created_at, 1, 10) WHERE scheduled_date IS NULL")
 
 
 init_db()
@@ -55,7 +59,7 @@ class TaskIn(BaseModel):
     title: str
     # 생략해도 검증기가 돌도록 validate_default 를 켠다. 아니면 None 이 저장소로 넘어간다.
     description: str | None = Field(default=None, validate_default=True)
-    scheduled_date: str | None = None
+    scheduled_date: str  # 필수 (D-021). 생략 · null 은 형식 오류로 422 가 된다.
 
     @field_validator("title")
     @classmethod
@@ -77,9 +81,7 @@ class TaskIn(BaseModel):
 
     @field_validator("scheduled_date")
     @classmethod
-    def valid_scheduled_date(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
+    def valid_scheduled_date(cls, value: str) -> str:
         # 정규식으로 YYYY-MM-DD 모양만 받고, 실제로 존재하는 날짜인지 확인한다 (예: 2월 30일 거절).
         if not DATE_PATTERN.match(value):
             raise ValueError("예정일은 YYYY-MM-DD 형식이어야 합니다.")
@@ -126,37 +128,21 @@ def create_task(body: TaskIn):
 
 
 @app.get("/api/tasks")
-def list_tasks(
-    offset: int = Query(0, ge=0),
-    limit: int = Query(5, ge=1, le=5),
-    month: str | None = Query(None, pattern=MONTH_PATTERN),
-    undated: bool = False,
-):
-    if month is not None and undated:
-        raise HTTPException(status_code=422, detail="month 와 undated 는 함께 쓸 수 없습니다.")
+def list_tasks(month: str = Query(pattern=MONTH_PATTERN)):
+    # 그 달에 예정일이 있는 카드 전부. 쪽 나누기 없이 날짜순, 같은 날은 등록순 (D-022).
+    # 날짜가 YYYY-MM-DD 문자열이라 사전순 비교가 날짜순과 같다.
     try:
         conn = connect()
         try:
-            if month is not None:
-                # 그 달에 예정일이 있는 카드 전부. 쪽 나누기 없이 날짜순, 같은 날은 등록순.
-                # 날짜가 YYYY-MM-DD 문자열이라 사전순 비교가 날짜순과 같다.
-                rows = conn.execute(
-                    f"SELECT {TASK_COLUMNS} FROM tasks "
-                    "WHERE scheduled_date >= ? AND scheduled_date <= ? "
-                    "ORDER BY scheduled_date, id",
-                    (f"{month}-01", f"{month}-31"),
-                ).fetchall()
-                return {"items": [dict(row) for row in rows]}
-            # 하나 더 읽어 다음 페이지가 있는지 알아낸다.
-            where = "WHERE scheduled_date IS NULL " if undated else ""
             rows = conn.execute(
-                f"SELECT {TASK_COLUMNS} FROM tasks {where}ORDER BY id DESC LIMIT ? OFFSET ?",
-                (limit + 1, offset),
+                f"SELECT {TASK_COLUMNS} FROM tasks "
+                "WHERE scheduled_date >= ? AND scheduled_date <= ? "
+                "ORDER BY scheduled_date, id",
+                (f"{month}-01", f"{month}-31"),
             ).fetchall()
         finally:
             conn.close()
     except sqlite3.Error:
         log.exception("카드 목록 조회 실패")
         raise HTTPException(status_code=500, detail="카드 목록을 불러오지 못했습니다.")
-    items = [dict(row) for row in rows[:limit]]
-    return {"items": items, "has_more": len(rows) > limit}
+    return {"items": [dict(row) for row in rows]}
