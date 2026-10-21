@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react'
 import type { SyntheticEvent } from 'react'
 import Calendar from './Calendar'
-import { STATUS_LABEL, STATUS_OPTIONS, monthKey, todayString } from './task'
+import TaskEditForm from './TaskEditForm'
+import type { TaskValues } from './TaskEditForm'
+import { DESCRIPTION_MAX, STATUS_LABEL, STATUS_OPTIONS, TITLE_MAX, monthKey, todayString } from './task'
 import type { Status, Task } from './task'
-
-const TITLE_MAX = 100
-const DESCRIPTION_MAX = 300
 
 async function fetchMonth(key: string) {
   const res = await fetch(`/api/tasks?month=${key}`)
@@ -25,6 +24,8 @@ function App() {
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [reloadTick, setReloadTick] = useState(0)
   const [saving, setSaving] = useState(false)
+  const [editing, setEditing] = useState(false)
+  const [editError, setEditError] = useState('')
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
 
@@ -47,6 +48,53 @@ function App() {
   const monthLoaded = monthData?.key === viewKey
   const monthTasks = monthLoaded ? monthData.items : []
   const selected = monthTasks.find((t) => t.id === selectedId) ?? null
+
+  // 다른 카드를 고르면 하던 수정은 취소된다.
+  function selectTask(id: number) {
+    setSelectedId(id)
+    setEditing(false)
+    setEditError('')
+  }
+
+  function cancelEdit() {
+    setEditing(false)
+    setEditError('')
+  }
+
+  // 서버가 저장한 뒤에 화면을 바꾼다 (D-009). 실패하면 수정 칸을 연 채로 입력을 남기고 안내한다.
+  async function updateTask(id: number, values: TaskValues) {
+    setNotice('')
+    setError('')
+    setEditError('')
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/tasks/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(values),
+      })
+      if (res.status === 404) {
+        setError('이미 없는 카드입니다. 목록을 다시 불러옵니다.')
+        setSelectedId(null)
+        setEditing(false)
+        setReloadTick((n) => n + 1)
+        return
+      }
+      if (!res.ok) throw new Error()
+      const updated = (await res.json()) as Task
+      // 예정일이 다른 달로 옮겨졌으면 그 달로 따라가서 카드를 계속 보여 준다.
+      const [y, m] = updated.scheduled_date.split('-').map(Number)
+      setViewYear(y)
+      setViewMonth(m - 1)
+      setReloadTick((n) => n + 1)
+      setEditing(false)
+      setNotice('수정되었습니다.')
+    } catch {
+      setEditError('수정하지 못했습니다. 입력한 내용은 그대로 남아 있습니다.')
+    } finally {
+      setSaving(false)
+    }
+  }
 
   function moveMonth(delta: number) {
     const d = new Date(viewYear, viewMonth + delta, 1)
@@ -209,7 +257,7 @@ function App() {
           tasks={monthTasks}
           loading={!monthLoaded}
           selectedId={selectedId}
-          onSelect={setSelectedId}
+          onSelect={selectTask}
           onPrev={() => moveMonth(-1)}
           onNext={() => moveMonth(1)}
           onToday={goToday}
@@ -217,6 +265,17 @@ function App() {
         {monthLoaded && monthTasks.length === 0 && <p>이 달에는 카드가 없습니다.</p>}
         {selected && (
           <div className="task-detail">
+            {editing ? (
+              <TaskEditForm
+                key={selected.id}
+                task={selected}
+                saving={saving}
+                error={editError}
+                onSave={(values) => updateTask(selected.id, values)}
+                onCancel={cancelEdit}
+              />
+            ) : (
+              <>
             <strong>{selected.title}</strong> [{STATUS_LABEL[selected.status]}]
             <div>예정일: {selected.scheduled_date}</div>
             <div>
@@ -234,11 +293,16 @@ function App() {
                   ))}
                 </select>
               </label>{' '}
+              <button type="button" disabled={saving} onClick={() => setEditing(true)}>
+                수정
+              </button>{' '}
               <button type="button" disabled={saving} onClick={deleteTask}>
                 삭제
               </button>
             </div>
             <div>{selected.description || '(설명 없음)'}</div>
+              </>
+            )}
           </div>
         )}
       </section>
