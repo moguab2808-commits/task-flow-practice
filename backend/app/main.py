@@ -4,13 +4,15 @@ import re
 import sqlite3
 from datetime import date, datetime
 from pathlib import Path
+from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 
 TITLE_MAX = 100
 DESCRIPTION_MAX = 300
-STATUS_TODO = "TODO"  # 새 카드의 처음 상태 (D-011). 나머지 값은 상태 변경 이슈에서 쓴다.
+STATUS_TODO = "TODO"  # 새 카드의 처음 상태 (D-011)
+StatusValue = Literal["TODO", "IN_PROGRESS", "DONE"]  # 화면 표시: 할 일 · 처리중 · 완료
 DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 MONTH_PATTERN = r"^\d{4}-(0[1-9]|1[0-2])$"
 TASK_COLUMNS = "id, title, description, status, scheduled_date, created_at, updated_at"
@@ -92,6 +94,10 @@ class TaskIn(BaseModel):
         return value
 
 
+class StatusIn(BaseModel):
+    status: StatusValue
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
@@ -125,6 +131,30 @@ def create_task(body: TaskIn):
         raise HTTPException(status_code=500, detail="카드를 저장하지 못했습니다.")
     log.info("카드 등록 완료 (id=%s)", task["id"])
     return task
+
+
+@app.patch("/api/tasks/{task_id}/status")
+def change_status(task_id: int, body: StatusIn):
+    # 상태와 고친 시각만 바꾼다. 제목 · 설명 · 예정일은 건드리지 않는다 (D-008).
+    # 현재 상태와 상관없이 세 값 중 아무 값으로나 바꿀 수 있다 (D-010).
+    now = datetime.now().isoformat(timespec="seconds")
+    try:
+        conn = connect()
+        try:
+            with conn:
+                conn.execute(
+                    "UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?",
+                    (body.status, now, task_id),
+                )
+            row = conn.execute(f"SELECT {TASK_COLUMNS} FROM tasks WHERE id = ?", (task_id,)).fetchone()
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        log.exception("상태 변경 실패")
+        raise HTTPException(status_code=500, detail="상태를 바꾸지 못했습니다.")
+    if row is None:
+        raise HTTPException(status_code=404, detail="카드를 찾을 수 없습니다.")
+    return dict(row)
 
 
 @app.get("/api/tasks")

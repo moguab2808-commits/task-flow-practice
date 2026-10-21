@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { SyntheticEvent } from 'react'
 import Calendar from './Calendar'
-import { STATUS_LABEL, monthKey, todayString } from './task'
-import type { Task } from './task'
+import { STATUS_LABEL, STATUS_OPTIONS, monthKey, todayString } from './task'
+import type { Status, Task } from './task'
 
 const TITLE_MAX = 100
 const DESCRIPTION_MAX = 300
@@ -24,6 +24,7 @@ function App() {
   const [monthData, setMonthData] = useState<{ key: string; items: Task[] } | null>(null)
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [reloadTick, setReloadTick] = useState(0)
+  const [savingStatus, setSavingStatus] = useState(false)
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
 
@@ -83,6 +84,36 @@ function App() {
       setReloadTick((n) => n + 1)
     } catch {
       setError('등록하지 못했습니다.')
+    }
+  }
+
+  // 서버가 저장한 뒤에 화면을 바꾼다 (D-009). 실패하면 선택 상자는 이전 상태 그대로다.
+  async function changeStatus(status: Status) {
+    if (!selected) return
+    setNotice('')
+    setError('')
+    setSavingStatus(true)
+    try {
+      const res = await fetch(`/api/tasks/${selected.id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      })
+      if (res.status === 404) {
+        setError('이미 없는 카드입니다. 목록을 다시 불러옵니다.')
+        setSelectedId(null)
+        setReloadTick((n) => n + 1)
+        return
+      }
+      if (!res.ok) throw new Error()
+      const updated = (await res.json()) as Task
+      setMonthData((prev) =>
+        prev && { ...prev, items: prev.items.map((t) => (t.id === updated.id ? updated : t)) },
+      )
+    } catch {
+      setError('상태를 바꾸지 못했습니다.')
+    } finally {
+      setSavingStatus(false)
     }
   }
 
@@ -160,6 +191,22 @@ function App() {
           <div className="task-detail">
             <strong>{selected.title}</strong> [{STATUS_LABEL[selected.status]}]
             <div>예정일: {selected.scheduled_date}</div>
+            <div>
+              <label>
+                상태{' '}
+                <select
+                  value={selected.status}
+                  disabled={savingStatus}
+                  onChange={(e) => changeStatus(e.target.value as Status)}
+                >
+                  {STATUS_OPTIONS.map((s) => (
+                    <option key={s} value={s}>
+                      {STATUS_LABEL[s]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
             <div>{selected.description || '(설명 없음)'}</div>
           </div>
         )}

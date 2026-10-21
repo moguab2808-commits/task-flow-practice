@@ -10,9 +10,12 @@ export type Task = {
 
 export const STATUS_LABEL: Record<Status, string> = {
   TODO: '할 일',
-  IN_PROGRESS: '진행 중',
+  IN_PROGRESS: '처리중',
   DONE: '완료',
 }
+
+// 상태 선택 상자의 선택지 순서
+export const STATUS_OPTIONS: Status[] = ['TODO', 'IN_PROGRESS', 'DONE']
 
 const pad = (n: number) => String(n).padStart(2, '0')
 
