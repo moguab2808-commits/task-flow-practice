@@ -133,6 +133,30 @@ def create_task(body: TaskIn):
     return task
 
 
+@app.patch("/api/tasks/{task_id}")
+def update_task(task_id: int, body: TaskIn):
+    # 제목 · 설명 · 예정일을 모두 받아 바꾼다(전체 값 방식). 등록과 같은 검증을 쓴다.
+    # 상태는 바꾸지 못한다 (D-008). 요청에 status 가 있어도 무시한다.
+    now = datetime.now().isoformat(timespec="seconds")
+    try:
+        conn = connect()
+        try:
+            with conn:
+                conn.execute(
+                    "UPDATE tasks SET title = ?, description = ?, scheduled_date = ?, updated_at = ? WHERE id = ?",
+                    (body.title, body.description, body.scheduled_date, now, task_id),
+                )
+            row = conn.execute(f"SELECT {TASK_COLUMNS} FROM tasks WHERE id = ?", (task_id,)).fetchone()
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        log.exception("카드 수정 실패")
+        raise HTTPException(status_code=500, detail="카드를 수정하지 못했습니다.")
+    if row is None:
+        raise HTTPException(status_code=404, detail="카드를 찾을 수 없습니다.")
+    return dict(row)
+
+
 @app.patch("/api/tasks/{task_id}/status")
 def change_status(task_id: int, body: StatusIn):
     # 상태와 고친 시각만 바꾼다. 제목 · 설명 · 예정일은 건드리지 않는다 (D-008).

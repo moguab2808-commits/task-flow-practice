@@ -1,4 +1,8 @@
-export type Status = 'TODO' | 'IN_PROGRESS' | 'DONE'
+// 입력 길이 제한 (D-014, D-015). 서버도 같은 값으로 다시 검증한다.
+export const TITLE_MAX = 100
+export const DESCRIPTION_MAX = 300
+
+export type Status ='TODO' | 'IN_PROGRESS' | 'DONE'
 
 export type Task = {
   id: number
