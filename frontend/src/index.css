@@ -1,0 +1,72 @@
+.calendar-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border-top: 1px solid #ccc;
+  border-left: 1px solid #ccc;
+}
+
+.calendar-weekday {
+  padding: 4px;
+  text-align: center;
+  font-weight: bold;
+  background: #f4f4f4;
+  border-right: 1px solid #ccc;
+  border-bottom: 1px solid #ccc;
+}
+
+.calendar-cell {
+  min-height: 90px;
+  padding: 4px;
+  border-right: 1px solid #ccc;
+  border-bottom: 1px solid #ccc;
+  overflow: hidden;
+}
+
+.calendar-cell.dim {
+  background: #fafafa;
+  color: #bbb;
+}
+
+.calendar-cell.today {
+  background: #fff8dc;
+}
+
+.day-number {
+  font-size: 0.85em;
+}
+
+.calendar-cell.today .day-number {
+  font-weight: bold;
+}
+
+.calendar-card,
+.calendar-more {
+  display: block;
+  width: 100%;
+  margin-top: 2px;
+  padding: 2px 4px;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8em;
+  cursor: pointer;
+}
+
+.calendar-card.selected {
+  outline: 2px solid #2563eb;
+}
+
+.task-detail {
+  margin-top: 12px;
+  padding: 8px;
+  border: 1px solid #ccc;
+  white-space: pre-wrap;
+}
