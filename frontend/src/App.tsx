@@ -24,7 +24,7 @@ function App() {
   const [monthData, setMonthData] = useState<{ key: string; items: Task[] } | null>(null)
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [reloadTick, setReloadTick] = useState(0)
-  const [savingStatus, setSavingStatus] = useState(false)
+  const [saving, setSaving] = useState(false)
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
 
@@ -92,7 +92,7 @@ function App() {
     if (!selected) return
     setNotice('')
     setError('')
-    setSavingStatus(true)
+    setSaving(true)
     try {
       const res = await fetch(`/api/tasks/${selected.id}/status`, {
         method: 'PATCH',
@@ -113,7 +113,35 @@ function App() {
     } catch {
       setError('상태를 바꾸지 못했습니다.')
     } finally {
-      setSavingStatus(false)
+      setSaving(false)
+    }
+  }
+
+  // 삭제 전에 브라우저 확인창으로 한 번 묻는다 (D-013, D-024). 취소하면 아무 요청도 보내지 않는다.
+  // 서버가 지운 뒤에 캘린더에서 카드가 사라진다 (D-009). 실패하면 카드는 그대로다.
+  async function deleteTask() {
+    if (!selected) return
+    if (!window.confirm(`'${selected.title}' 카드를 삭제할까요? 삭제하면 되돌릴 수 없습니다.`)) return
+    const id = selected.id
+    setNotice('')
+    setError('')
+    setSaving(true)
+    try {
+      const res = await fetch(`/api/tasks/${id}`, { method: 'DELETE' })
+      if (res.status === 404) {
+        setError('이미 없는 카드입니다. 목록을 다시 불러옵니다.')
+        setSelectedId(null)
+        setReloadTick((n) => n + 1)
+        return
+      }
+      if (!res.ok) throw new Error()
+      setMonthData((prev) => prev && { ...prev, items: prev.items.filter((t) => t.id !== id) })
+      setSelectedId(null)
+      setNotice('삭제되었습니다.')
+    } catch {
+      setError('삭제하지 못했습니다.')
+    } finally {
+      setSaving(false)
     }
   }
 
@@ -196,7 +224,7 @@ function App() {
                 상태{' '}
                 <select
                   value={selected.status}
-                  disabled={savingStatus}
+                  disabled={saving}
                   onChange={(e) => changeStatus(e.target.value as Status)}
                 >
                   {STATUS_OPTIONS.map((s) => (
@@ -205,7 +233,10 @@ function App() {
                     </option>
                   ))}
                 </select>
-              </label>
+              </label>{' '}
+              <button type="button" disabled={saving} onClick={deleteTask}>
+                삭제
+              </button>
             </div>
             <div>{selected.description || '(설명 없음)'}</div>
           </div>
